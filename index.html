@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nasro Final Pro</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root { --p-dark: #ff1f4b; --p-mid: #ff4d6d; --p-light: #ffb3c1; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: #000; overflow: hidden; height: 100vh; }
+
+        /* إصلاح الآلة الحاسبة لتكون احترافية */
+        #calc-screen { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100vh; padding-bottom: 30px; background: #000; z-index: 100; position: relative; }
+        #display { width: 100%; max-width: 330px; text-align: right; font-size: 70px; color: white; padding: 20px; font-weight: 300; overflow: hidden; }
+        .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; width: 100%; max-width: 330px; }
+        .btn { height: 72px; width: 72px; border-radius: 50%; border: none; font-size: 30px; color: white; background: #333; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: filter 0.1s; }
+        .btn:active { filter: brightness(1.5); }
+        .orange { background: #ff9f0a; } 
+        .gray { background: #a5a5a5; color: black; }
+        .zero { width: 156px; border-radius: 40px; grid-column: span 2; justify-content: flex-start; padding-left: 25px; }
+
+        /* الشات */
+        #chat-ui { display: none; height: 100vh; flex-direction: column; background: #000; position: relative; }
+        .header { background: rgba(255, 77, 109, 0.95); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; background: #fff0f3; }
+        .bubble { padding: 10px 15px; border-radius: 20px; max-width: 80%; position: relative; font-size: 16px; }
+        .me { align-self: flex-end; background: var(--p-mid); color: white; border-bottom-right-radius: 2px; }
+        .other { align-self: flex-start; background: white; color: #333; border-bottom-left-radius: 2px; }
+
+        /* شريط الأدوات */
+        .footer { background: white; padding: 10px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #ddd; }
+        .input-box { flex: 1; background: #f0f0f0; border-radius: 20px; padding: 8px 15px; }
+        .input-box input { border: none; background: transparent; width: 100%; outline: none; }
+        .action-btn { background: var(--p-dark); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+        .rec-active { background: #00ff00; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        #mic-live-indicator { display: none; color: #00ff00; font-size: 10px; font-weight: bold; }
+    </style>
+</head>
+<body onload="askName()">
+
+<div id="calc-screen">
+    <div id="display">0</div>
+    <div class="buttons">
+        <button class="btn gray" onclick="cls()">AC</button>
+        <button class="btn gray">±</button>
+        <button class="btn gray">%</button>
+        <button class="btn orange" onclick="setOp('/')">÷</button>
+        <button class="btn" onclick="num('7')">7</button>
+        <button class="btn" onclick="num('8')">8</button>
+        <button class="btn" onclick="num('9')">9</button>
+        <button class="btn orange" onclick="setOp('*')">×</button>
+        <button class="btn" onclick="num('4')">4</button>
+        <button class="btn" onclick="num('5')">5</button>
+        <button class="btn" onclick="num('6')">6</button>
+        <button class="btn orange" onclick="setOp('-')">−</button>
+        <button class="btn" onclick="num('1')">1</button>
+        <button class="btn" onclick="num('2')">2</button>
+        <button class="btn" onclick="num('3')">3</button>
+        <button class="btn orange" onclick="setOp('+')">+</button>
+        <button class="btn zero" onclick="num('0')">0</button>
+        <button class="btn" onclick="num('.')">.</button>
+        <button class="btn orange" onclick="doCalc()">=</button>
+    </div>
+</div>
+
+<div id="chat-ui">
+    <div class="header">
+        <div>
+            <b>أريج ❤️ نصرو</b>
+            <div id="status-text" style="font-size:10px;">متصل الآن</div>
+            <div id="mic-live-indicator">🎙️ مايك لايف مفتوح...</div>
+        </div>
+        <div style="display:flex; gap:15px;">
+            <span onclick="toggleLiveMic()" id="mic-live-btn" style="cursor:pointer; font-size:20px;">🎙️</span>
+            <span>📞</span>
+        </div>
+    </div>
+    <div id="messages"></div>
+    <div class="footer">
+        <label style="font-size:22px; cursor:pointer;">📷<input type="file" accept="image/*" hidden onchange="upImg(this)"></label>
+        <div class="input-box"><input type="text" id="mIn" placeholder="اكتب رسالة..." oninput="updBtn()"></div>
+        <button id="mainBtn" class="action-btn" onclick="handleBtn()">🎤</button>
+    </div>
+</div>
+
+<script>
+    // إعدادات فايربيس
+    const config = { databaseURL: "https://calcchat-b10d1-default-rtdb.firebaseio.com" };
+    firebase.initializeApp(config); const db = firebase.database();
+    
+    let user = "", exp = "", isRec = false, rec, chunks = [];
+
+    function askName() { user = prompt("اسمك؟"); if(!user) askName(); }
+
+    // --- منطق الآلة الحاسبة المصلح ---
+    function num(v) { exp += v; document.getElementById('display').innerText = exp; }
+    function setOp(o) { exp += " " + o + " "; document.getElementById('display').innerText = exp; }
+    function cls() { exp = ""; document.getElementById('display').innerText = "0"; }
+    function doCalc() {
+        if(exp === "123332") {
+            document.getElementById('calc-screen').style.display='none';
+            document.getElementById('chat-ui').style.display='flex';
+            initChat();
+        } else {
+            try { exp = eval(exp).toString(); document.getElementById('display').innerText = exp; }
+            catch(e) { cls(); }
+        }
+    }
+
+    // --- الرسائل الصوتية والمايك ---
+    async function handleBtn() {
+        let val = document.getElementById('mIn').value.trim();
+        if(val) {
+            db.ref('chat').push({u:user, v:val, t:'txt', time: new Date().toLocaleTimeString()});
+            document.getElementById('mIn').value = ""; updBtn();
+        } else {
+            if(!isRec) { // بدء التسجيل
+                let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                rec = new MediaRecorder(stream); chunks = [];
+                rec.ondataavailable = e => chunks.push(e.data);
+                rec.onstop = () => {
+                    let reader = new FileReader();
+                    reader.readAsDataURL(new Blob(chunks));
+                    reader.onloadend = () => db.ref('chat').push({u:user, v:reader.result, t:'aud'});
+                };
+                rec.start(); isRec = true;
+                document.getElementById('mainBtn').classList.add('rec-active');
+            } else { // إرسال التسجيل
+                rec.stop(); isRec = false;
+                document.getElementById('mainBtn').classList.remove('rec-active');
+            }
+        }
+    }
+
+    // مايك لايف (بث مباشر)
+    let liveStream;
+    async function toggleLiveMic() {
+        const btn = document.getElementById('mic-live-btn');
+        if(!liveStream) {
+            liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            btn.style.color = "#00ff00";
+            db.ref('liveMic/'+user).set(true);
+        } else {
+            liveStream.getTracks().forEach(t => t.stop()); liveStream = null;
+            btn.style.color = "white";
+            db.ref('liveMic/'+user).remove();
+        }
+    }
+
+    function initChat() {
+        db.ref('chat').on('child_added', s => {
+            let m = s.val();
+            let d = document.createElement('div');
+            d.className = "bubble " + (m.u === user ? "me" : "other");
+            let html = `<b>${m.u}</b><br>`;
+            if(m.t==='aud') html += `<audio controls src="${m.v}" style="width:200px"></audio>`;
+            else if(m.t==='img') html += `<img src="${m.v}" style="width:100%">`;
+            else html += m.v;
+            d.innerHTML = html;
+            document.getElementById('messages').appendChild(d);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        });
+
+        db.ref('liveMic').on('value', snap => {
+            let data = snap.val();
+            let other = Object.keys(data||{}).find(n => n!==user);
+            document.getElementById('mic-live-indicator').style.display = other ? 'block' : 'none';
+        });
+    }
+
+    function upImg(el) {
+        let f = el.files[0]; if(!f) return;
+        let r = new FileReader();
+        r.onload = e => db.ref('chat').push({u:user, v:e.target.result, t:'img'});
+        r.readAsDataURL(f);
+    }
+
+    function updBtn() {
+        document.getElementById('mainBtn').innerText = document.getElementById('mIn').value.trim() ? "➤" : "🎤";
+    }
+</script>
+</body>
+</html>
