@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WhatsApp Pro - Fixed</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --wa-bg: #0b141a; --wa-header: #1f2c34; --sent: #005c4b; --recv: #202c33; --accent: #00a884; }
+        body { margin: 0; background: var(--wa-bg); font-family: sans-serif; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* شاشة الدخول */
+        #login-screen { position: fixed; inset: 0; background: var(--wa-bg); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .login-card { width: 85%; text-align: center; background: #111b21; padding: 30px; border-radius: 20px; border: 1px solid #2a3942; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: none; background: #2a3942; color: white; text-align: center; outline: none; }
+        
+        /* الهيدر */
+        header { padding: 10px 15px; background: var(--wa-header); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .status-info { font-size: 11px; color: var(--accent); }
+        .typing { color: white !important; font-style: italic; }
+
+        /* منطقة الدردشة */
+        .chat-area { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; background-color: var(--wa-bg); }
+        
+        .msg { max-width: 75%; padding: 10px; border-radius: 10px; font-size: 15px; position: relative; word-wrap: break-word; }
+        .sent { background: var(--sent); align-self: flex-start; border-top-left-radius: 0; }
+        .recv { background: var(--recv); align-self: flex-end; border-top-right-radius: 0; }
+        .time { font-size: 10px; opacity: 0.6; display: block; margin-top: 5px; text-align: left; }
+
+        /* الفوتر */
+        footer { padding: 10px; background: var(--wa-header); display: flex; gap: 10px; align-items: center; position: relative; }
+        .input-container { flex: 1; background: #2a3942; border-radius: 25px; display: flex; align-items: center; padding: 0 15px; }
+        #msgIn { background: transparent; border: none; color: white; flex: 1; padding: 10px; outline: none; }
+        
+        .action-btn { background: var(--accent); color: white; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; }
+        .recording { background: #ff3b30 !important; transform: scale(1.1); }
+
+        /* واجهة المكالمة */
+        #call-ui { position: fixed; inset: 0; background: black; z-index: 2000; display: none; flex-direction: column; }
+        #remote-video { width: 100%; height: 100%; object-fit: cover; }
+        #local-video { position: absolute; top: 20px; right: 20px; width: 100px; height: 150px; border: 2px solid white; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="login-screen">
+    <div class="login-card">
+        <h2 style="color:var(--accent)">WhatsApp Recovery</h2>
+        <input type="text" id="myId" placeholder="اسمك الشخصي">
+        <input type="text" id="friendId" placeholder="اسم الشخص الآخر">
+        <button onclick="startApp()" style="background:var(--accent); color:white; border:none; padding:15px; width:100%; border-radius:10px; font-weight:bold;">ابدأ الآن</button>
+    </div>
+</div>
+
+<header>
+    <div style="display:flex; align-items:center; gap:10px;">
+        <span class="material-icons">arrow_forward</span>
+        <div>
+            <b id="displayFriend">...</b>
+            <div id="statusLabel" class="status-info">جاري الاتصال...</div>
+        </div>
+    </div>
+    <div style="display:flex; gap:15px">
+        <span class="material-icons" onclick="startCall()">videocam</span>
+        <span class="material-icons">call</span>
+        <span class="material-icons">more_vert</span>
+    </div>
+</header>
+
+<div class="chat-area" id="chatContainer"></div>
+
+<footer>
+    <div class="input-container">
+        <label for="fileIn"><span class="material-icons" style="color:#8696a0">attach_file</span></label>
+        <input type="file" id="fileIn" hidden accept="image/*" onchange="sendImage(this)">
+        <input type="text" id="msgIn" placeholder="مراسلة" oninput="handleTyping()">
+    </div>
+    <button class="action-btn" id="mainBtn" onmousedown="startVoice()" onmouseup="stopVoice()" ontouchstart="startVoice()" ontouchend="stopVoice()">
+        <span class="material-icons" id="btnIcon">mic</span>
+    </button>
+</footer>
+
+<div id="call-ui">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay playsinline muted></video>
+    <button onclick="location.reload()" style="position:absolute; bottom:50px; left:50%; transform:translateX(-50%); background:red; padding:15px; border-radius:50%; border:none; color:white;"><span class="material-icons">call_end</span></button>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, push, onChildAdded, set, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    // إعدادات Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyBuXHbLhUDRlUUfjYpsYWxNpK6clr-bXjA",
+        authDomain: "chat-86f7a.firebaseapp.com",
+        databaseURL: "https://chat-86f7a-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "chat-86f7a",
+        storageBucket: "chat-86f7a.firebasestorage.app",
+        appId: "1:155807699577:web:ae55ec68cdba783a367aa8"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    let myId, friendId, chatRef, peer, recorder, chunks = [];
+
+    window.startApp = () => {
+        myId = document.getElementById('myId').value.trim();
+        friendId = document.getElementById('friendId').value.trim();
+        if(!myId || !friendId) return alert("يرجى إدخال الأسماء!");
+
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('displayFriend').innerText = friendId;
+
+        // 1. غرفة الدردشة الموحدة (الحل الجذري لعدم ظهور الرسائل)
+        const roomId = [myId, friendId].sort().join("_");
+        chatRef = ref(db, `final_v4/${roomId}`);
+
+        // 2. إدارة الحالة (متصل / يكتب / متى خرج)
+        const myStatusRef = ref(db, `status/${myId}`);
+        set(myStatusRef, { online: true, typing: false, lastSeen: 'الآن' });
+        onDisconnect(myStatusRef).set({ online: false, lastSeen: new Date().toLocaleTimeString() });
+
+        onValue(ref(db, `status/${friendId}`), (snap) => {
+            const data = snap.val();
+            const label = document.getElementById('statusLabel');
+            if(data?.typing) { label.innerText = "يكتب الآن..."; label.className = "status-info typing"; }
+            else if(data?.online) { label.innerText = "متصل الآن"; label.className = "status-info"; }
+            else { label.innerText = "آخر ظهور: " + (data?.lastSeen || "غير معروف"); label.className = "status-info"; }
+        });
+
+        // 3. استرجاع الرسائل (الصور، الصوت، النص)
+        onChildAdded(chatRef, (snap) => {
+            renderMessage(snap.val());
+        });
+
+        setupPeer();
+    };
+
+    function renderMessage(msg) {
+        const cont = document.getElementById('chatContainer');
+        const div = document.createElement('div');
+        const isMe = msg.sender === myId;
+        div.className = `msg ${isMe ? 'sent' : 'recv'}`;
+        
+        let content = "";
+        if(msg.type === 'text') content = msg.body;
+        else if(msg.type === 'img') content = `<img src="${msg.body}" style="max-width:100%; border-radius:8px;">`;
+        else if(msg.type === 'audio') content = `<audio controls src="${msg.body}" style="width:210px;"></audio>`;
+
+        const time = new Date(msg.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        div.innerHTML = `${content} <span class="time">${time} ${isMe ? '✓✓' : ''}</span>`;
+        
+        cont.appendChild(div);
+        cont.scrollTop = cont.scrollHeight;
+        if(!isMe) window.navigator.vibrate?.(100);
+    }
+
+    // إرسال النص
+    window.handleTyping = () => {
+        const val = document.getElementById('msgIn').value;
+        set(ref(db, `status/${myId}/typing`), val.length > 0);
+        document.getElementById('btnIcon').innerText = val.length > 0 ? "send" : "mic";
+    };
+
+    document.getElementById('mainBtn').onclick = () => {
+        const inp = document.getElementById('msgIn');
+        if(inp.value) {
+            push(chatRef, { sender: myId, type: 'text', body: inp.value, time: Date.now() });
+            inp.value = "";
+            handleTyping();
+        }
+    };
+
+    // إرسال الصور
+    window.sendImage = (el) => {
+        const reader = new FileReader();
+        reader.onload = (e) => push(chatRef, { sender: myId, type: 'img', body: e.target.result, time: Date.now() });
+        reader.readAsDataURL(el.files[0]);
+    };
+
+    // الرسائل الصوتية
+    window.startVoice = () => {
+        if(document.getElementById('msgIn').value) return;
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
+            recorder = new MediaRecorder(s);
+            recorder.start();
+            document.getElementById('mainBtn').classList.add('recording');
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/webm' });
+                const r = new FileReader();
+                r.onload = (e) => push(chatRef, { sender: myId, type: 'audio', body: e.target.result, time: Date.now() });
+                r.readAsDataURL(blob);
+                chunks = [];
+                document.getElementById('mainBtn').classList.remove('recording');
+            };
+        });
+    };
+    window.stopVoice = () => recorder?.stop();
+
+    // المكالمات
+    function setupPeer() {
+        peer = new Peer(myId + "_v4");
+        peer.on('call', (call) => {
+            if(confirm("مكالمة فيديو واردة.. رد؟")) {
+                navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => {
+                    document.getElementById('call-ui').style.display = 'flex';
+                    document.getElementById('local-video').srcObject = s;
+                    call.answer(s);
+                    call.on('stream', rs => document.getElementById('remote-video').srcObject = rs);
+                });
+            }
+        });
+    }
+
+    window.startCall = () => {
+        navigator.mediaDevices.getUserMedia({video:true, audio:true}).then(s => {
+            document.getElementById('call-ui').style.display = 'flex';
+            document.getElementById('local-video').srcObject = s;
+            const call = peer.call(friendId + "_v4", s);
+            call.on('stream', rs => document.getElementById('remote-video').srcObject = rs);
+        });
+    };
+</script>
+</body>
+</html>
