@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nasro VIP - Pro Plus</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root { --p-dark: #ff1f4b; --p-mid: #ff4d6d; --bg-glass: rgba(0, 0, 0, 0.85); }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: #000; overflow: hidden; height: 100vh; color: white; }
+
+        /* الحاسبة */
+        #calc-screen { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100vh; padding-bottom: 50px; background: #000; position: relative; z-index: 100; }
+        #display { width: 100%; max-width: 350px; text-align: right; font-size: 80px; color: white; padding: 0 30px; }
+        .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; width: 100%; max-width: 350px; padding: 10px; }
+        .btn { height: 75px; width: 75px; border-radius: 50%; border: none; font-size: 30px; color: white; background: #333; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .orange { background: #ff9f0a; } .gray { background: #a5a5a5; color: black; }
+        .zero { width: 162px; border-radius: 40px; justify-content: flex-start; padding-left: 30px; grid-column: span 2; }
+
+        /* الدردشة */
+        #chat-ui { display: none; height: 100vh; flex-direction: column; position: relative; background: #000; }
+        #layer-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('https://image2url.com/r2/default/images/1770449811893-f461bec6-24f2-48fd-b92b-59a5ba56bf71.jpg'); background-size: cover; background-position: center; z-index: 0; filter: brightness(0.5); }
+        
+        .header { background: var(--bg-glass); padding: 15px; display: flex; justify-content: space-between; align-items: center; z-index: 10; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .header-title { text-align: center; flex: 1; }
+        #typing-status { font-size: 13px; color: #adff2f; font-weight: bold; }
+
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; z-index: 2; }
+        .bubble { padding: 12px 18px; border-radius: 20px; max-width: 80%; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.4); line-height: 1.5; background: #fff; color: #000; }
+        .me { align-self: flex-end; border-bottom-right-radius: 2px; background: #dcf8c6; }
+        .other { align-self: flex-start; border-bottom-left-radius: 2px; }
+
+        .footer { background: rgba(0, 0, 0, 0.95); padding: 12px; z-index: 10; }
+        .input-area { display: flex; align-items: center; gap: 10px; width: 100%; }
+        .input-box { flex: 1; background: rgba(255,255,255,0.15); border-radius: 25px; height: 48px; display: flex; align-items: center; padding: 0 15px; border: 1px solid rgba(255,255,255,0.2); }
+        .input-box input { flex: 1; border: none; outline: none; background: transparent; color: white; font-size: 16px; }
+        
+        .bottom-icons { display: flex; gap: 12px; align-items: center; }
+        .icon-item { font-size: 24px; cursor: pointer; }
+
+        #sendBtn, #recBtn { background: var(--p-dark); color: white; width: 45px; height: 45px; border-radius: 50%; border: none; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        #recBtn.recording { background: #adff2f; animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0% {transform: scale(1);} 50% {transform: scale(1.1);} 100% {transform: scale(1);} }
+
+        /* واجهة المكالمة */
+        #call-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .call-btn { width: 70px; height: 70px; border-radius: 50%; border: none; margin: 20px; font-size: 30px; cursor: pointer; }
+        .end-call { background: #ff3b30; color: white; }
+        .accept-call { background: #4cd964; color: white; }
+
+        audio, video { border-radius: 12px; max-width: 100%; margin-top: 5px; }
+        #prog-line { height: 4px; background: #adff2f; width: 0%; position: absolute; top: 0; left: 0; z-index: 100; transition: 0.3s; }
+    </style>
+</head>
+<body onload="askName()">
+
+<div id="calc-screen">
+    <div id="display">0</div>
+    <div class="buttons">
+        <button class="btn gray" onclick="ad('')">AC</button><button class="btn gray">±</button><button class="btn gray">%</button><button class="btn orange" onclick="ad('/')">÷</button>
+        <button class="btn" onclick="ad('7')">7</button><button class="btn" onclick="ad('8')">8</button><button class="btn" onclick="ad('9')">9</button><button class="btn orange" onclick="ad('*')">×</button>
+        <button class="btn" onclick="ad('4')">4</button><button class="btn" onclick="ad('5')">5</button><button class="btn" onclick="ad('6')">6</button><button class="btn orange" onclick="ad('-')">−</button>
+        <button class="btn" onclick="ad('1')">1</button><button class="btn" onclick="ad('2')">2</button><button class="btn" onclick="ad('3')">3</button><button class="btn orange" onclick="ad('+')">+</button>
+        <button class="btn zero" onclick="ad('0')">0</button><button class="btn" onclick="ad('.')">.</button><button class="btn orange" onclick="calc()">=</button>
+    </div>
+</div>
+
+<div id="chat-ui">
+    <div id="prog-line"></div>
+    <div id="layer-bg"></div>
+    <div class="header">
+        <span onclick="if(confirm('مسح الكل؟')) db.ref('chat').remove()" style="cursor:pointer; font-size:24px;">🗑️</span>
+        <div class="header-title">
+            <div style="font-weight:bold; font-size:18px;">Nasro VIP Pro</div>
+            <div id="typing-status"></div>
+        </div>
+        <div class="bottom-icons">
+            <span class="icon-item" onclick="startCall('voice')">📞</span>
+            <span class="icon-item" onclick="startCall('video')">📹</span>
+        </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <div class="footer">
+        <div class="input-area">
+            <div class="input-box">
+                <input type="text" id="mIn" placeholder="اكتب هنا..." oninput="reportTyping()">
+            </div>
+            <div class="bottom-icons" id="iconGroup">
+                <label class="icon-item">🎬<input type="file" accept="video/*" hidden onchange="upFile(this,'vid')"></label>
+                <label class="icon-item">📷<input type="file" accept="image/*" hidden onchange="upFile(this,'img')"></label>
+            </div>
+            <button id="sendBtn" style="display:none;" onclick="sendMsg()">➤</button>
+            <button id="recBtn" onclick="toggleMic()">🎤</button>
+        </div>
+    </div>
+</div>
+
+<div id="call-overlay">
+    <h2 id="call-user-name">اتصال من...</h2>
+    <p id="call-type-label">مكالمة فيديو</p>
+    <div id="remote-video-container"></div>
+    <div style="display:flex;">
+        <button class="call-btn accept-call" id="ansBtn" onclick="answerCall()">✅</button>
+        <button class="call-btn end-call" onclick="endCall()">❌</button>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = { databaseURL: "https://calcchat-b10d1-default-rtdb.firebaseio.com" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    let user = localStorage.getItem("chat_user") || ""; 
+    let exp = "", typingTimeout, mediaRecorder, audioChunks = [];
+
+    function askName() { if(!user) { user = prompt("اسمك:") || "نصرو"; localStorage.setItem("chat_user", user); } }
+    function ad(v) { exp=(v==='')?'':exp+v; document.getElementById('display').innerText=exp||"0"; }
+    function calc() { if(exp==="123332"){document.getElementById('calc-screen').style.display='none'; document.getElementById('chat-ui').style.display='flex'; initChat();} else {try{exp=eval(exp).toString(); document.getElementById('display').innerText=exp;}catch(e){exp='';}}}
+
+    function reportTyping() {
+        let val = document.getElementById('mIn').value.trim();
+        document.getElementById('sendBtn').style.display = val ? 'flex' : 'none';
+        document.getElementById('recBtn').style.display = val ? 'none' : 'flex';
+        document.getElementById('iconGroup').style.display = val ? 'none' : 'flex';
+        db.ref('typing/' + user).set(true);
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => db.ref('typing/' + user).remove(), 3000);
+    }
+
+    function initChat() {
+        db.ref("chat").on("child_added", s => {
+            let m = s.val();
+            let d = document.createElement("div"); d.className = "bubble " + (m.u===user?"me":"other");
+            let html = `<b style="font-size:12px; color:var(--p-dark);">${m.u}</b><br>`;
+            if(m.t==='img') html += `<img src="${m.v}" style="width:100%;">`;
+            else if(m.t==='vid') html += `<video controls src="${m.v}" style="width:100%;"></video>`;
+            else if(m.t==='audio') html += `<audio controls src="${m.v}"></audio>`;
+            else html += m.v;
+            d.innerHTML = html + `<div style="font-size:9px; opacity:0.5; margin-top:5px;">${m.time}</div>`;
+            document.getElementById("messages").appendChild(d);
+            document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
+        });
+
+        db.ref('typing').on('value', s => {
+            let typers = [];
+            s.forEach(child => { if(child.key !== user) typers.push(child.key); });
+            document.getElementById('typing-status').innerText = typers.length ? "✍️ " + typers.join(' و ') + " يكتب..." : "";
+        });
+
+        // مراقبة المكالمات الواردة
+        db.ref('calls').on('value', s => {
+            let call = s.val();
+            if(call && call.to === user && call.status === 'ringing') {
+                showCallUI(call.from, call.type, true);
+            } else if (!call) {
+                document.getElementById('call-overlay').style.display = 'none';
+            }
+        });
+    }
+
+    function sendMsg() {
+        let v = document.getElementById('mIn').value.trim();
+        if(v) { 
+            db.ref("chat").push({u:user, v:v, t:'txt', time:getTime()});
+            document.getElementById('mIn').value = ""; reportTyping();
+        }
+    }
+
+    // --- ميزة التسجيل الصوتي ---
+    async function toggleMic() {
+        const btn = document.getElementById('recBtn');
+        if (!mediaRecorder || mediaRecorder.state === "inactive") {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = () => {
+                    db.ref("chat").push({u:user, v:reader.result, t:'audio', time:getTime()});
+                };
+                stream.getTracks().forEach(t => t.stop());
+            };
+            mediaRecorder.start();
+            btn.classList.add('recording');
+            btn.innerText = "⏹️";
+        } else {
+            mediaRecorder.stop();
+            btn.classList.remove('recording');
+            btn.innerText = "🎤";
+        }
+    }
+
+    // --- ميزة المكالمات ---
+    function startCall(type) {
+        let to = prompt("أدخل اسم الشخص الذي تريد الاتصال به:");
+        if(!to) return;
+        db.ref('calls').set({from: user, to: to, type: type, status: 'ringing'});
+        showCallUI(to, type, false);
+    }
+
+    function showCallUI(name, type, incoming) {
+        document.getElementById('call-overlay').style.display = 'flex';
+        document.getElementById('call-user-name').innerText = name;
+        document.getElementById('call-type-label').innerText = type === 'video' ? "مكالمة فيديو جارية..." : "مكالمة صوتية جارية...";
+        document.getElementById('ansBtn').style.display = incoming ? 'block' : 'none';
+    }
+
+    function answerCall() {
+        alert("تم قبول المكالمة! (ملاحظة: الربط الفعلي يحتاج خادم TURN/STUN، حالياً تعمل كإشعار)");
+        db.ref('calls').update({status: 'connected'});
+    }
+
+    function endCall() {
+        db.ref('calls').remove();
+        document.getElementById('call-overlay').style.display = 'none';
+    }
+
+    function upFile(el, type) {
+        let f = el.files[0]; if(!f) return;
+        let r = new FileReader();
+        r.onprogress = (e) => { if(e.lengthComputable) document.getElementById('prog-line').style.width = (e.loaded/e.total*100) + "%"; };
+        r.onload = (e) => {
+            db.ref("chat").push({u:user, v:e.target.result, t:type, time:getTime()})
+            .then(() => document.getElementById('prog-line').style.width = "0%");
+        };
+        r.readAsDataURL(f);
+    }
+
+    function getTime() { return new Date().toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}); }
+</script>
+</body>
+                                                                                                          </html>
